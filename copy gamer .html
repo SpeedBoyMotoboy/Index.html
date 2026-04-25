@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cup Heroes Clone</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a2e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: 'Press Start 2P', cursive;
+        }
+        #game-container {
+            position: relative;
+            width: 400px;
+            height: 700px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        canvas {
+            background: linear-gradient(to bottom, #16213e, #0f3460);
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas" width="400" height="700"></canvas>
+</div>
+
+<script>
+/**
+ * DOCUMENTAÇÃO INTERNA
+ * Game State: Controla se estamos no MENU, COMBATE, PACHINKO ou CARTAS.
+ * Entities: Herói e Inimigos são objetos com métodos de renderização próprios.
+ */
+
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+// --- CONSTANTES E CONFIGURAÇÕES ---
+const STATE = { MENU: 0, SELECT: 1, COMBAT: 2, PACHINKO: 3, CARDS: 4, GAMEOVER: 5 };
+let currentState = STATE.MENU;
+
+const HERO_TYPES = {
+    COWBOY: { name: 'Cowboy', color: '#d2b48c', hp: 100, dmg: 10 },
+    BARBARIAN: { name: 'Barbarian', color: '#ff4d4d', hp: 150, dmg: 7 },
+    ROGUE: { name: 'Rogue', color: '#9370db', hp: 80, dmg: 15 },
+    FELORC: { name: 'Felorc', color: '#32cd32', hp: 120, dmg: 12 }
+};
+
+// --- OBJETO DE ESTADO DO JOGO ---
+let game = {
+    hero: null,
+    enemies: [],
+    wave: 1,
+    balls: 10,
+    particles: [],
+    lastTime: 0
+};
+
+// --- FUNÇÕES DE DESENHO (SPRITES PROGRAMÁTICOS) ---
+function drawCup(ctx, x, y, color, scale = 1) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    
+    // Corpo do copo
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(-20, -30);
+    ctx.lineTo(20, -30);
+    ctx.lineTo(15, 30);
+    ctx.lineTo(-15, 30);
+    ctx.closePath();
+    ctx.fill();
+    
+    // Borda superior
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(-22, -35, 44, 5);
+    
+    ctx.restore();
+}
+
+function drawEnemy(ctx, x, y) {
+    ctx.fillStyle = '#4a0e0e';
+    ctx.beginPath();
+    ctx.arc(x, y, 20, 0, Math.PI * 2);
+    ctx.fill();
+    // Olhos malignos
+    ctx.fillStyle = 'red';
+    ctx.fillRect(x - 10, y - 5, 5, 5);
+    ctx.fillRect(x + 5, y - 5, 5, 5);
+}
+
+// --- LÓGICA DE INTERAÇÃO ---
+canvas.addEventListener('click', (e) => {
+    if (currentState === STATE.MENU) {
+        currentState = STATE.SELECT;
+    } else if (currentState === STATE.SELECT) {
+        // Seleção simplificada: pega o primeiro (Cowboy) para teste
+        game.hero = { ...HERO_TYPES.COWBOY, x: 200, y: 550, currentHp: 100 };
+        startWave();
+        currentState = STATE.COMBAT;
+    }
+});
+
+function startWave() {
+    game.enemies = [];
+    let count = 2 + Math.floor(game.wave / 2);
+    for(let i=0; i < count; i++) {
+        game.enemies.push({
+            x: 50 + (i * 80) % 300,
+            y: 100 + Math.floor(i/4) * 60,
+            hp: 20 + (game.wave * 5),
+            maxHp: 20 + (game.wave * 5)
+        });
+    }
+}
+
+// --- GAME LOOP ---
+function update(time) {
+    const dt = time - game.lastTime;
+    game.lastTime = time;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    if (currentState === STATE.MENU) {
+        ctx.fillStyle = 'white';
+        ctx.textAlign = 'center';
+        ctx.fillText('CUP HEROES', 200, 300);
+        ctx.font = '10px "Press Start 2P"';
+        ctx.fillText('CLIQUE PARA JOGAR', 200, 400);
+    } 
+    
+    else if (currentState === STATE.SELECT) {
+        ctx.fillText('ESCOLHA SEU HERÓI', 200, 100);
+        drawCup(ctx, 200, 300, HERO_TYPES.COWBOY.color, 1.5);
+        ctx.fillText('COWBOY', 200, 400);
+    }
+
+    else if (currentState === STATE.COMBAT) {
+        // Desenha Herói
+        drawCup(ctx, game.hero.x, game.hero.y, game.hero.color);
+        
+        // Desenha Inimigos e HP
+        game.enemies.forEach(en => {
+            drawEnemy(ctx, en.x, en.y);
+            // Barra de HP
+            ctx.fillStyle = 'red';
+            ctx.fillRect(en.x - 20, en.y - 35, 40, 5);
+            ctx.fillStyle = 'green';
+            ctx.fillRect(en.x - 20, en.y - 35, (en.hp/en.maxHp) * 40, 5);
+        });
+
+        ctx.fillStyle = 'white';
+        ctx.fillText(`WAVE: ${game.wave}/15`, 200, 30);
+    }
+
+    requestAnimationFrame(update);
+}
+
+requestAnimationFrame(update);
+</script>
+</body>
+</html>
