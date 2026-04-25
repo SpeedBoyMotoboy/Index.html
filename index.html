@@ -1,25 +1,776 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cup Heroes</title>
+    <title>Cup Heroes - Web Clone</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
-        body { font-family: Arial, sans-serif; background-color: #f0f8ff; }
-        h1 { color: #2c3e50; }
-        .container { width: 80%; margin: auto; }
-        .game-area { display: flex; justify-content: center; align-items: center; height: 500px; background-color: #fff; border: 1px solid #ddd; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            font-family: 'Press Start 2P', cursive;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            position: relative;
+            width: 100%;
+            max-width: 400px;
+            aspect-ratio: 400 / 700;
+            background: #000;
+            border: 4px solid #00ff00;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            image-rendering: pixelated;
+        }
+
+        @media (max-width: 480px) {
+            #gameContainer {
+                max-width: 90vw;
+            }
+        }
+
+        @media (max-height: 800px) {
+            #gameContainer {
+                max-height: 90vh;
+            }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Cup Heroes Game</h1>
-        <div class="game-area">
-            <!-- Game elements will be rendered here -->
-        </div>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="400" height="700"></canvas>
     </div>
+
     <script>
-        // Game logic will be implemented here
+        // ============================================
+        // CONSTANTES E CONFIGURAÇÕES
+        // ============================================
+        const CANVAS_WIDTH = 400;
+        const CANVAS_HEIGHT = 700;
+        const GAME_STATES = {
+            MENU: 'MENU',
+            HERO_SELECT: 'HERO_SELECT',
+            COMBAT: 'COMBAT',
+            BALL_DROP: 'BALL_DROP',
+            CARD_SELECT: 'CARD_SELECT',
+            GAME_OVER: 'GAME_OVER',
+            VICTORY: 'VICTORY'
+        };
+
+        const HEROES = {
+            COWBOY: {
+                name: 'Cowboy',
+                style: 'Burst/Crit',
+                ability: 'Rifle Shot',
+                color: '#D2691E',
+                accentColor: '#FFD700',
+                baseStats: { hp: 100, damage: 15, defense: 5, speed: 1.0 }
+            },
+            BARBARIAN: {
+                name: 'Barbarian',
+                style: 'Tank/Reflect',
+                ability: 'Whirlwind',
+                color: '#DC143C',
+                accentColor: '#8B4513',
+                baseStats: { hp: 150, damage: 10, defense: 15, speed: 0.8 }
+            },
+            ROGUE: {
+                name: 'Rogue',
+                style: 'Crit-heavy',
+                ability: 'Backstab',
+                color: '#4B0082',
+                accentColor: '#228B22',
+                baseStats: { hp: 80, damage: 20, defense: 3, speed: 1.3 }
+            },
+            FELORC: {
+                name: 'Felorc',
+                style: 'Late-game',
+                ability: 'Hellfire',
+                color: '#228B22',
+                accentColor: '#FF6347',
+                baseStats: { hp: 120, damage: 12, defense: 8, speed: 1.0 }
+            }
+        };
+
+        const CARD_POOL = [
+            { name: '+10 HP', effect: 'hp', value: 10, cost: 5 },
+            { name: '+5 Damage', effect: 'damage', value: 5, cost: 10 },
+            { name: '+3 Defense', effect: 'defense', value: 3, cost: 8 },
+            { name: '+2 Damage', effect: 'damage', value: 2, cost: 5 },
+            { name: '+15 HP', effect: 'hp', value: 15, cost: 15 },
+            { name: '+8 Damage', effect: 'damage', value: 8, cost: 20 },
+            { name: '+5 Defense', effect: 'defense', value: 5, cost: 15 },
+            { name: 'Double Damage', effect: 'damage', value: 10, cost: 25 },
+            { name: '+20 HP', effect: 'hp', value: 20, cost: 20 },
+            { name: 'Tank Up', effect: 'defense', value: 8, cost: 20 }
+        ];
+
+        const WAVE_CONFIG = {
+            1: { enemyCount: 2, enemyHp: 20, enemyDamage: 3 },
+            2: { enemyCount: 3, enemyHp: 25, enemyDamage: 4 },
+            3: { enemyCount: 3, enemyHp: 30, enemyDamage: 5 },
+            4: { enemyCount: 4, enemyHp: 35, enemyDamage: 6 },
+            5: { enemyCount: 4, enemyHp: 40, enemyDamage: 7 },
+            6: { enemyCount: 5, enemyHp: 45, enemyDamage: 8 },
+            7: { enemyCount: 5, enemyHp: 50, enemyDamage: 9 },
+            8: { enemyCount: 6, enemyHp: 55, enemyDamage: 10 },
+            9: { enemyCount: 6, enemyHp: 60, enemyDamage: 11 },
+            10: { enemyCount: 7, enemyHp: 70, enemyDamage: 12 },
+            11: { enemyCount: 7, enemyHp: 80, enemyDamage: 13 },
+            12: { enemyCount: 8, enemyHp: 90, enemyDamage: 14 },
+            13: { enemyCount: 8, enemyHp: 100, enemyDamage: 15 },
+            14: { enemyCount: 9, enemyHp: 110, enemyDamage: 16 },
+            15: { enemyCount: 1, enemyHp: 300, enemyDamage: 20, isBoss: true }
+        };
+
+        // ============================================
+        // STATE MACHINE
+        // ============================================
+        let gameState = GAME_STATES.MENU;
+        let nextState = null;
+        let stateTimer = 0;
+
+        function changeState(newState) {
+            nextState = newState;
+            stateTimer = 0;
+        }
+
+        // ============================================
+        // GAME STATE OBJECT
+        // ============================================
+        const game = {
+            hero: null,
+            enemies: [],
+            wave: 1,
+            totalBalls: 0,
+            ballsThisWave: 0,
+            balls: [],
+            gates: [],
+            particles: [],
+            floatingTexts: [],
+            selectedCards: [],
+            combatSpeed: 1.0,
+            waveStartTime: 0,
+            ballDropStartTime: 0
+        };
+
+        // ============================================
+        // HERO SYSTEM
+        // ============================================
+        function createHero(heroType) {
+            const heroData = HEROES[heroType];
+            return {
+                type: heroType,
+                name: heroData.name,
+                ability: heroData.ability,
+                color: heroData.color,
+                accentColor: heroData.accentColor,
+                hp: heroData.baseStats.hp,
+                maxHp: heroData.baseStats.hp,
+                damage: heroData.baseStats.damage,
+                defense: heroData.baseStats.defense,
+                speed: heroData.baseStats.speed,
+                x: CANVAS_WIDTH / 2 - 20,
+                y: CANVAS_HEIGHT - 100,
+                width: 40,
+                height: 50,
+                attackCooldown: 0,
+                attackDelay: 30 / heroData.baseStats.speed
+            };
+        }
+
+        // ============================================
+        // ENEMY SYSTEM
+        // ============================================
+        function createEnemy(x, y, hp, damage) {
+            return {
+                x: x,
+                y: y,
+                width: 30,
+                height: 40,
+                hp: hp,
+                maxHp: hp,
+                damage: damage,
+                attackCooldown: 0,
+                attackDelay: 40,
+                color: '#4a4a4a',
+                isDead: false
+            };
+        }
+
+        function startWave() {
+            const config = WAVE_CONFIG[game.wave];
+            game.enemies = [];
+            game.ballsThisWave = 0;
+
+            for (let i = 0; i < config.enemyCount; i++) {
+                const x = 50 + (i % 3) * 100;
+                const y = 100 + Math.floor(i / 3) * 80;
+                game.enemies.push(createEnemy(x, y, config.enemyHp, config.enemyDamage));
+            }
+
+            game.waveStartTime = Date.now();
+        }
+
+        // ============================================
+        // COMBAT SYSTEM
+        // ============================================
+        function processCombatTick() {
+            // Hero attack
+            if (game.hero.attackCooldown <= 0) {
+                const target = game.enemies.find(e => !e.isDead);
+                if (target) {
+                    const damage = Math.max(1, game.hero.damage - Math.floor(Math.random() * target.hp * 0.05));
+                    target.hp -= damage;
+                    game.floatingTexts.push(createFloatingText(target.x, target.y, damage.toString(), '#FF0000'));
+                    game.hero.attackCooldown = game.hero.attackDelay;
+
+                    if (target.hp <= 0) {
+                        target.isDead = true;
+                        game.ballsThisWave += Math.floor(target.maxHp / 10) + 5;
+                        game.totalBalls += game.ballsThisWave;
+                        createParticles(target.x, target.y, 10);
+                    }
+                }
+            } else {
+                game.hero.attackCooldown -= game.combatSpeed;
+            }
+
+            // Enemy attacks
+            game.enemies.forEach(enemy => {
+                if (!enemy.isDead) {
+                    if (enemy.attackCooldown <= 0) {
+                        const damage = Math.max(1, enemy.damage - game.hero.defense);
+                        game.hero.hp -= damage;
+                        game.floatingTexts.push(createFloatingText(game.hero.x, game.hero.y, damage.toString(), '#FFFF00'));
+                        enemy.attackCooldown = enemy.attackDelay;
+                    } else {
+                        enemy.attackCooldown -= game.combatSpeed;
+                    }
+                }
+            });
+
+            // Check wave clear
+            if (game.enemies.every(e => e.isDead)) {
+                if (game.wave === 15) {
+                    changeState(GAME_STATES.VICTORY);
+                } else {
+                    changeState(GAME_STATES.BALL_DROP);
+                    initBallDrop();
+                }
+            }
+
+            // Check hero death
+            if (game.hero.hp <= 0) {
+                changeState(GAME_STATES.GAME_OVER);
+            }
+        }
+
+        // ============================================
+        // BALL DROP SYSTEM
+        // ============================================
+        function initBallDrop() {
+            game.balls = [];
+            game.gates = [];
+            game.ballDropStartTime = Date.now();
+
+            // Create gates
+            const gateValues = [2, 3, 4, 2];
+            const gateY = [150, 250, 350, 450];
+            
+            gateValues.forEach((value, i) => {
+                game.gates.push({
+                    x: 50 + Math.random() * 200,
+                    y: gateY[i],
+                    width: 300,
+                    height: 30,
+                    multiplier: value,
+                    color: value === 2 ? '#0099FF' : value === 3 ? '#00FF00' : '#FFD700'
+                });
+            });
+
+            // Create balls
+            for (let i = 0; i < Math.min(game.ballsThisWave, 20); i++) {
+                game.balls.push({
+                    x: CANVAS_WIDTH / 2 + (Math.random() - 0.5) * 40,
+                    y: 30,
+                    vx: (Math.random() - 0.5) * 4,
+                    vy: 0,
+                    radius: 4,
+                    active: true,
+                    color: '#FFFF00'
+                });
+            }
+        }
+
+        function updateBallDrop(dt) {
+            const gravity = 0.3;
+            const friction = 0.98;
+            const bounce = 0.6;
+
+            game.balls.forEach(ball => {
+                if (!ball.active) return;
+
+                ball.vy += gravity;
+                ball.vx *= friction;
+                ball.x += ball.vx;
+                ball.y += ball.vy;
+
+                // Boundary collision
+                if (ball.x - ball.radius < 0) {
+                    ball.x = ball.radius;
+                    ball.vx *= -bounce;
+                }
+                if (ball.x + ball.radius > CANVAS_WIDTH) {
+                    ball.x = CANVAS_WIDTH - ball.radius;
+                    ball.vx *= -bounce;
+                }
+                if (ball.y + ball.radius > CANVAS_HEIGHT) {
+                    ball.active = false;
+                    game.totalBalls += 1;
+                }
+
+                // Gate collision
+                game.gates.forEach(gate => {
+                    if (
+                        ball.x > gate.x &&
+                        ball.x < gate.x + gate.width &&
+                        ball.y > gate.y &&
+                        ball.y < gate.y + gate.height &&
+                        ball.vy > 0
+                    ) {
+                        game.totalBalls += gate.multiplier - 1;
+                        ball.active = false;
+                    }
+                });
+            });
+
+            // Check if all balls are collected
+            if (game.balls.every(b => !b.active)) {
+                changeState(GAME_STATES.CARD_SELECT);
+            }
+        }
+
+        // ============================================
+        // CARD SYSTEM
+        // ============================================
+        function generateCards() {
+            game.selectedCards = [];
+            const shuffled = CARD_POOL.sort(() => Math.random() - 0.5);
+            for (let i = 0; i < 3; i++) {
+                game.selectedCards.push(shuffled[i]);
+            }
+        }
+
+        function applyCard(cardIndex) {
+            const card = game.selectedCards[cardIndex];
+            if (game.totalBalls >= card.cost) {
+                game.totalBalls -= card.cost;
+                game.hero[card.effect] += card.value;
+                if (card.effect === 'hp') {
+                    game.hero.maxHp += card.value;
+                }
+                game.wave += 1;
+                startWave();
+                changeState(GAME_STATES.COMBAT);
+            }
+        }
+
+        // ============================================
+        // PARTICLE SYSTEM
+        // ============================================
+        function createParticles(x, y, count) {
+            for (let i = 0; i < count; i++) {
+                game.particles.push({
+                    x: x,
+                    y: y,
+                    vx: (Math.random() - 0.5) * 8,
+                    vy: (Math.random() - 0.5) * 8 - 2,
+                    life: 30,
+                    maxLife: 30,
+                    color: '#FF6347'
+                });
+            }
+        }
+
+        function updateParticles() {
+            game.particles = game.particles.filter(p => {
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.2;
+                p.life -= 1;
+                return p.life > 0;
+            });
+        }
+
+        function createFloatingText(x, y, text, color) {
+            return {
+                x: x,
+                y: y,
+                text: text,
+                color: color,
+                life: 40,
+                maxLife: 40
+            };
+        }
+
+        function updateFloatingTexts() {
+            game.floatingTexts = game.floatingTexts.filter(t => {
+                t.y -= 2;
+                t.life -= 1;
+                return t.life > 0;
+            });
+        }
+
+        // ============================================
+        // INPUT HANDLING
+        // ============================================
+        const input = {
+            mouseX: 0,
+            mouseY: 0,
+            isDragging: false,
+            cupX: CANVAS_WIDTH / 2
+        };
+
+        const canvas = document.getElementById('gameCanvas');
+
+        canvas.addEventListener('pointerdown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            input.mouseX = (e.clientX - rect.left) * (CANVAS_WIDTH / rect.width);
+            input.mouseY = (e.clientY - rect.top) * (CANVAS_HEIGHT / rect.height);
+
+            if (gameState === GAME_STATES.BALL_DROP) {
+                if (input.mouseY < 80) {
+                    input.isDragging = true;
+                }
+            }
+
+            if (gameState === GAME_STATES.MENU) {
+                if (input.mouseX > 150 && input.mouseX < 250 && input.mouseY > 300 && input.mouseY < 350) {
+                    changeState(GAME_STATES.HERO_SELECT);
+                }
+            }
+
+            if (gameState === GAME_STATES.HERO_SELECT) {
+                const heroTypes = Object.keys(HEROES);
+                heroTypes.forEach((heroType, i) => {
+                    const col = i % 2;
+                    const row = Math.floor(i / 2);
+                    const x = 50 + col * 150;
+                    const y = 150 + row * 200;
+                    if (input.mouseX > x && input.mouseX < x + 100 && input.mouseY > y && input.mouseY < y + 100) {
+                        game.hero = createHero(heroType);
+                        game.wave = 1;
+                        startWave();
+                        changeState(GAME_STATES.COMBAT);
+                    }
+                });
+            }
+
+            if (gameState === GAME_STATES.CARD_SELECT) {
+                for (let i = 0; i < 3; i++) {
+                    const x = 30 + i * 120;
+                    if (input.mouseX > x && input.mouseX < x + 100 && input.mouseY > 400 && input.mouseY < 600) {
+                        applyCard(i);
+                    }
+                }
+            }
+
+            if (gameState === GAME_STATES.GAME_OVER || gameState === GAME_STATES.VICTORY) {
+                if (input.mouseX > 100 && input.mouseX < 300 && input.mouseY > 600 && input.mouseY < 650) {
+                    changeState(GAME_STATES.MENU);
+                }
+            }
+        });
+
+        canvas.addEventListener('pointermove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            input.mouseX = (e.clientX - rect.left) * (CANVAS_WIDTH / rect.width);
+            input.mouseY = (e.clientY - rect.top) * (CANVAS_HEIGHT / rect.height);
+
+            if (input.isDragging && gameState === GAME_STATES.BALL_DROP) {
+                input.cupX = Math.max(30, Math.min(CANVAS_WIDTH - 30, input.mouseX));
+            }
+        });
+
+        canvas.addEventListener('pointerup', () => {
+            input.isDragging = false;
+        });
+
+        // ============================================
+        // RENDERING
+        // ============================================
+        const ctx = canvas.getContext('2d');
+
+        function drawHero(hero) {
+            ctx.fillStyle = hero.color;
+            ctx.fillRect(hero.x, hero.y, hero.width, hero.height);
+            ctx.fillStyle = hero.accentColor;
+            ctx.fillRect(hero.x + 5, hero.y + 5, hero.width - 10, 10);
+        }
+
+        function drawEnemy(enemy) {
+            ctx.fillStyle = enemy.isDead ? '#333333' : enemy.color;
+            ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+            ctx.fillStyle = '#FF0000';
+            ctx.fillRect(enemy.x, enemy.y - 10, (enemy.hp / enemy.maxHp) * enemy.width, 5);
+        }
+
+        function drawHpBar(x, y, hp, maxHp, width) {
+            ctx.fillStyle = '#333333';
+            ctx.fillRect(x, y, width, 8);
+            const hpPercent = Math.max(0, hp / maxHp);
+            const color = hpPercent > 0.5 ? '#00FF00' : hpPercent > 0.25 ? '#FFFF00' : '#FF0000';
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, width * hpPercent, 8);
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(x, y, width, 8);
+        }
+
+        function drawText(text, x, y, size = 12, color = '#FFFFFF', align = 'center') {
+            ctx.fillStyle = color;
+            ctx.font = `${size}px 'Press Start 2P'`;
+            ctx.textAlign = align;
+            ctx.fillText(text, x, y);
+        }
+
+        function renderMenu() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            const time = Date.now() * 0.001;
+            const bounce = Math.sin(time * 2) * 10;
+
+            drawText('CUP', CANVAS_WIDTH / 2, 100 + bounce, 24, '#FFD700');
+            drawText('HEROES', CANVAS_WIDTH / 2, 150 + bounce, 24, '#00FF00');
+
+            ctx.fillStyle = '#0099FF';
+            ctx.fillRect(150, 300, 100, 50);
+            drawText('PLAY', CANVAS_WIDTH / 2, 335, 16, '#000000');
+        }
+
+        function renderHeroSelect() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            drawText('SELECT HERO', CANVAS_WIDTH / 2, 50, 14, '#00FF00');
+
+            const heroTypes = Object.keys(HEROES);
+            heroTypes.forEach((heroType, i) => {
+                const col = i % 2;
+                const row = Math.floor(i / 2);
+                const x = 50 + col * 150;
+                const y = 150 + row * 200;
+
+                const hero = HEROES[heroType];
+                ctx.fillStyle = hero.color;
+                ctx.fillRect(x, y, 100, 100);
+                drawText(hero.name, x + 50, y + 60, 10, '#FFFFFF');
+            });
+        }
+
+        function renderCombat() {
+            ctx.fillStyle = '#1a3a1a';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // Draw enemies
+            game.enemies.forEach(enemy => drawEnemy(enemy));
+
+            // Draw hero
+            drawHero(game.hero);
+            drawHpBar(game.hero.x - 10, game.hero.y - 20, game.hero.hp, game.hero.maxHp, game.hero.width + 20);
+
+            // Draw particles
+            game.particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life / p.maxLife;
+                ctx.fillRect(p.x, p.y, 4, 4);
+                ctx.globalAlpha = 1;
+            });
+
+            // Draw floating texts
+            game.floatingTexts.forEach(t => {
+                ctx.globalAlpha = t.life / t.maxLife;
+                drawText(t.text, t.x, t.y, 10, t.color);
+                ctx.globalAlpha = 1;
+            });
+
+            // HUD
+            drawText(`WAVE ${game.wave}/15`, 20, 30, 12, '#00FF00', 'left');
+            drawText(`BALLS: ${game.totalBalls}`, CANVAS_WIDTH - 20, 30, 12, '#FFD700', 'right');
+
+            // Speed up button
+            ctx.fillStyle = '#FF6347';
+            ctx.fillRect(CANVAS_WIDTH - 50, CANVAS_HEIGHT - 50, 40, 40);
+            drawText('⏩', CANVAS_WIDTH - 30, CANVAS_HEIGHT - 20, 14, '#FFFFFF');
+        }
+
+        function renderBallDrop() {
+            ctx.fillStyle = 'rgba(100, 200, 255, 0.3)';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // Draw gates
+            game.gates.forEach(gate => {
+                ctx.fillStyle = gate.color;
+                ctx.fillRect(gate.x, gate.y, gate.width, gate.height);
+                drawText(`×${gate.multiplier}`, gate.x + gate.width / 2, gate.y + 20, 12, '#000000');
+            });
+
+            // Draw balls
+            game.balls.forEach(ball => {
+                if (ball.active) {
+                    ctx.fillStyle = ball.color;
+                    ctx.beginPath();
+                    ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#FFFFFF';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+            });
+
+            // Draw cup
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.ellipse(input.cupX, 40, 30, 20, 0, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#FFA500';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Ball counter
+            drawText(`BALLS: ${game.totalBalls}`, CANVAS_WIDTH / 2, 30, 12, '#FFFFFF');
+        }
+
+        function renderCardSelect() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            drawText('CHOOSE CARD', CANVAS_WIDTH / 2, 50, 14, '#00FF00');
+
+            game.selectedCards.forEach((card, i) => {
+                const x = 30 + i * 120;
+                ctx.fillStyle = '#0099FF';
+                ctx.fillRect(x, 400, 100, 200);
+                drawText(card.name, x + 50, 450, 8, '#FFFFFF');
+                drawText(`Cost: ${card.cost}`, x + 50, 550, 8, '#FFD700');
+            });
+        }
+
+        function renderGameOver() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            drawText('GAME OVER', CANVAS_WIDTH / 2, 150, 20, '#FF0000');
+            drawText(`Wave: ${game.wave}`, CANVAS_WIDTH / 2, 250, 14, '#FFFF00');
+
+            ctx.fillStyle = '#0099FF';
+            ctx.fillRect(100, 600, 200, 50);
+            drawText('RESTART', CANVAS_WIDTH / 2, 635, 12, '#000000');
+        }
+
+        function renderVictory() {
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            const time = Date.now() * 0.001;
+            const scale = 1 + Math.sin(time * 2) * 0.1;
+
+            ctx.save();
+            ctx.translate(CANVAS_WIDTH / 2, 200);
+            ctx.scale(scale, scale);
+            ctx.translate(-CANVAS_WIDTH / 2, -200);
+            drawText('VICTORY!', CANVAS_WIDTH / 2, 200, 24, '#FFD700');
+            ctx.restore();
+
+            drawText('Queen Rescued!', CANVAS_WIDTH / 2, 300, 14, '#00FF00');
+
+            ctx.fillStyle = '#0099FF';
+            ctx.fillRect(100, 600, 200, 50);
+            drawText('MENU', CANVAS_WIDTH / 2, 635, 12, '#000000');
+        }
+
+        // ============================================
+        // GAME LOOP
+        // ============================================
+        let lastTime = Date.now();
+
+        function gameLoop() {
+            const currentTime = Date.now();
+            const dt = (currentTime - lastTime) / 1000;
+            lastTime = currentTime;
+
+            // State transition
+            if (nextState) {
+                gameState = nextState;
+                nextState = null;
+
+                if (gameState === GAME_STATES.CARD_SELECT) {
+                    generateCards();
+                }
+            }
+
+            // Update
+            if (gameState === GAME_STATES.COMBAT) {
+                processCombatTick();
+                updateParticles();
+                updateFloatingTexts();
+            }
+
+            if (gameState === GAME_STATES.BALL_DROP) {
+                updateBallDrop(dt);
+            }
+
+            // Render
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            switch (gameState) {
+                case GAME_STATES.MENU:
+                    renderMenu();
+                    break;
+                case GAME_STATES.HERO_SELECT:
+                    renderHeroSelect();
+                    break;
+                case GAME_STATES.COMBAT:
+                    renderCombat();
+                    break;
+                case GAME_STATES.BALL_DROP:
+                    renderBallDrop();
+                    break;
+                case GAME_STATES.CARD_SELECT:
+                    renderCardSelect();
+                    break;
+                case GAME_STATES.GAME_OVER:
+                    renderGameOver();
+                    break;
+                case GAME_STATES.VICTORY:
+                    renderVictory();
+                    break;
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Start the game
+        gameLoop();
     </script>
 </body>
 </html>
